@@ -45,6 +45,71 @@ const getUserChannelSubscribers = asyncHandler(async (req, res) => {
 // controller to return channel list to which user has subscribed
 const getSubscribedChannels = asyncHandler(async (req, res) => {
     const { subscriberId } = req.params
+    if (!isValidObjectId(subscriberId)) {
+        throw new ApiError(400, "Invalid subscriber id")
+    }
+    const subscribedChannels = await Subscription.aggregate([
+        {
+            $match: {
+                subscriber: new mongoose.Types.ObjectId(subscriberId)
+            }
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "channel",
+                foreignField: "_id",
+                as: "channel",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "videos",
+                            localField: "_id",
+                            foreignField: "owner",
+                            as: "videos"
+                        }
+                    },
+                    {
+                        $addFields: {
+                            latestVideo: {
+                                $last: "$videos"
+                            }
+                        }
+                    },
+                    {
+                        $project: {
+                            _id: 1,
+                            username: 1,
+                            fullName: 1,
+                            avatar: 1,
+                            latestVideo: {
+                                _id: 1,
+                                videoFile: 1,
+                                thumbnail: 1,
+                                title: 1,
+                                description: 1,
+                                duration: 1,
+                                views: 1,
+                                createdAt: 1
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            $unwind: "$channel"
+        },
+        {
+            $project: {
+                _id: 0,
+                channel: 1
+            }
+        }
+    ])
+    return res
+        .status(200)
+        .json(new ApiResponse(200, subscribedChannels, "Subscribed channels fetched successfully"))
 })
 
 export {
